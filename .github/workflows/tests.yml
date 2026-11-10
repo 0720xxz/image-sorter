@@ -14,7 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # ubuntu-latest 已到 26.04，没有 3.9 的预编译包，老版本钉在 22.04
+        os: [ubuntu-22.04, windows-latest]
         python: ["3.9", "3.12"]
 
     steps:
