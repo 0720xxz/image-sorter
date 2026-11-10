@@ -1,0 +1,25 @@
+# 编译产物
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 运行时产物
+整理结果/
+.imagesorter_undo/
+.image-sorter.json
+
+# 巡检截图（保留 docs 下三张关键的）
+docs/shots/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
