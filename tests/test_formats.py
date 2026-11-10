@@ -149,8 +149,9 @@ class TestFormatMatrix(unittest.TestCase):
                 else:
                     self.assertIsNone(meta.when, f"{ext} 不该声称能读时间")
                     fallback.append(ext)
-        print(f"\n  能读时间的 {len(parsed)} 种: {' '.join(parsed)}")
-        print(f"  靠兜底的 {len(fallback)} 种: {' '.join(fallback)}")
+        # 用 ASCII 输出，Windows 控制台默认不是 UTF-8
+        print(f"\n  parsed  {len(parsed):2d}: {' '.join(parsed)}")
+        print(f"  fallback {len(fallback):2d}: {' '.join(fallback)}")
 
     def test_unknown_garbage_does_not_crash(self):
         for name in ("x.bin", "x.raw", "noext"):
