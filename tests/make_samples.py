@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import struct
 import zlib
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 TAG_DATETIME = 0x0132
@@ -173,8 +173,13 @@ def _box(kind: bytes, payload: bytes) -> bytes:
 
 
 def wrap_mp4(when: datetime, timescale: int = 1000) -> bytes:
-    """最小可解析的 MP4：ftyp + moov/mvhd + mdat，时间按 1904 纪元写入。"""
-    seconds = int((when - datetime(1904, 1, 1)).total_seconds())
+    """最小可解析的 MP4：ftyp + moov/mvhd + mdat，时间按 1904 纪元写入。
+
+    naive 的 when 一律当 UTC 处理，跟 QuickTime 规范一致。
+    """
+    epoch = datetime(1904, 1, 1, tzinfo=timezone.utc)
+    moment = when if when.tzinfo is not None else when.replace(tzinfo=timezone.utc)
+    seconds = int((moment - epoch).total_seconds())
     mvhd = _box(b"mvhd", b"\x00\x00\x00\x00" + struct.pack(">II", seconds, seconds)
                 + struct.pack(">I", timescale) + struct.pack(">I", 5000) + b"\x00" * 80)
     ftyp = _box(b"ftyp", b"isom" + struct.pack(">I", 512) + b"isommp41")
