@@ -325,6 +325,33 @@ class TestRobustness(unittest.TestCase):
         self.assertEqual(item.action, "planned", "位置对了但名字不对，应该重新处理")
         self.assertEqual(item.dst.name, "20200315_100000.jpg")
 
+    def test_wrong_timestamp_in_name_gets_fixed(self):
+        folder = self.source / "2020-03"
+        folder.mkdir()
+        # 名字像时间戳，但和 EXIF 里的 2020-03-15 不是一回事
+        (folder / "20230506_123456.jpg").write_bytes(self.jpg)
+        plan = build_plan(Options(source=str(self.source), rename_files=True))
+        item = next(i for i in plan.items if i.src.name == "20230506_123456.jpg")
+        self.assertEqual(item.action, "planned", "名字里的时间和拍摄时间不一致时必须纠正")
+        self.assertEqual(item.dst.name, "20200315_100000.jpg")
+
+    def test_correct_timestamp_in_name_stays_put(self):
+        folder = self.source / "2020-03"
+        folder.mkdir()
+        (folder / "20200315_100000.jpg").write_bytes(self.jpg)
+        plan = build_plan(Options(source=str(self.source), rename_files=True))
+        item = next(i for i in plan.items if i.src.name == "20200315_100000.jpg")
+        self.assertEqual(item.action, "in_place")
+
+    def test_parse_name_stamp(self):
+        from imagesorter.scanner import parse_name_stamp
+        self.assertEqual(parse_name_stamp(Path("20200315_100000.jpg")),
+                         datetime(2020, 3, 15, 10, 0, 0))
+        self.assertEqual(parse_name_stamp(Path("20200315_100000_001.jpg")),
+                         datetime(2020, 3, 15, 10, 0, 0))
+        self.assertIsNone(parse_name_stamp(Path("IMG_0001.jpg")))
+        self.assertIsNone(parse_name_stamp(Path("99999999_999999.jpg")))
+
     def test_readonly_target_is_replaced_in_overwrite_mode(self):
         target = self.source / "2020-03"
         target.mkdir()

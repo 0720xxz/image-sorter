@@ -449,6 +449,55 @@ def _xmp_when(xmp: bytes | None) -> datetime | None:
     return parse_datetime_any(match.group(1).decode("latin-1", "replace"))
 
 
+def read_all_times(path: str | Path) -> dict[str, str]:
+    """把这个文件里能找到的时间字段原样列出来，用来查时间不对的原因。"""
+    p = Path(path)
+    suffix = p.suffix.lower()
+    out: dict[str, str] = {}
+    try:
+        with open(long_path(p), "rb") as handle:
+            head = handle.read(READ_LIMIT)
+    except (OSError, ValueError):
+        return out
+    if len(head) < 16:
+        return out
+
+    exif = xmp = None
+    png_ctime = None
+    if head[:2] == b"\xff\xd8":
+        exif, xmp = _jpeg_sections(head)
+    elif head[:8] == b"\x89PNG\r\n\x1a\n":
+        exif, xmp, png_ctime = _png_payloads(head)
+    elif head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        exif, xmp = _webp_payloads(head)
+    elif head[4:8] == b"ftyp" or suffix in HEIF_EXTS or suffix in VIDEO_EXTS:
+        exif = _heif_exif(head)
+
+    tags = parse_tiff(exif) if exif else {}
+    for tag, label in (
+        (TAG_DT_ORIGINAL, "EXIF:DateTimeOriginal"),
+        (TAG_DT_DIGITIZED, "EXIF:DateTimeDigitized"),
+        (TAG_DATETIME, "EXIF:DateTime"),
+        (TAG_OFFSET_ORIGINAL, "EXIF:OffsetTimeOriginal"),
+        (TAG_MODEL, "EXIF:Model"),
+    ):
+        if tag in tags:
+            value = tags[tag]
+            out[label] = value if isinstance(value, str) else str(value)
+
+    if xmp:
+        match = _XMP_DATE.search(xmp)
+        if match:
+            out["XMP:CreateDate"] = match.group(1).decode("latin-1", "replace")
+    if png_ctime:
+        out["PNG:Creation Time"] = png_ctime
+    if head[4:8] == b"ftyp" or suffix in VIDEO_EXTS:
+        moment = _video_time(head)
+        if moment:
+            out["视频:mvhd"] = moment.strftime("%Y-%m-%d %H:%M:%S")
+    return out
+
+
 def read_meta(path: str | Path) -> Meta:
     """Read capture time (and camera model when present) from a file."""
     p = Path(path)

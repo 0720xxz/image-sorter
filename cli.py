@@ -25,13 +25,48 @@ def _fix_console() -> None:
             pass
 
 
+def explain_file(path: Path) -> int:
+    """打印单个文件的时间判定链路。"""
+    from datetime import datetime
+
+    from imagesorter.exif import read_all_times
+    from imagesorter.scanner import decide_time, parse_name_stamp
+
+    print(f"文件      {path}")
+    if not path.exists():
+        print("          不存在")
+        return 2
+    stat = path.stat()
+    print(f"大小      {stat.st_size} 字节")
+    print(f"修改时间  {datetime.fromtimestamp(stat.st_mtime)}")
+
+    fields = read_all_times(path)
+    print("文件里能找到的时间字段:")
+    if fields:
+        for key, value in fields.items():
+            print(f"  {key:26s} {value}")
+    else:
+        print("  一个都没有")
+
+    when, tag = decide_time(path, "auto")
+    print(f"最终采用  {when}   来源: {tag}")
+    if when is not None:
+        print(f"整理后叫  {when:%Y%m%d_%H%M%S}{path.suffix}")
+
+    stamped = parse_name_stamp(path)
+    if stamped is not None:
+        state = "一致" if when is not None and stamped == when else "不一致"
+        print(f"文件名里  {stamped}   {state}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     _fix_console()
     parser = argparse.ArgumentParser(
         prog="image-sorter",
         description="按拍摄时间把图片整理进以月份命名的文件夹（默认只预览，加 --apply 才动手）。",
     )
-    parser.add_argument("--source", required=True, help="待整理的文件夹")
+    parser.add_argument("--source", help="待整理的文件夹")
     parser.add_argument("--target", default="", help="输出根目录，默认与源目录相同")
     parser.add_argument("--mode", choices=("move", "copy", "link"), default="move",
                         help="link 建硬链接，不占额外空间，要求同一磁盘")
@@ -50,7 +85,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, default=25, help="预览时最多打印多少条")
     parser.add_argument("--undo-list", action="store_true", help="列出可撤销的批次")
     parser.add_argument("--undo-latest", action="store_true", help="撤销最近一次整理")
+    parser.add_argument("--explain", metavar="文件", help="看某个文件为什么用了这个时间")
     args = parser.parse_args(argv)
+
+    if args.explain:
+        return explain_file(Path(args.explain).expanduser())
+    if not args.source:
+        parser.error("除了 --explain，其余用法都需要 --source")
 
     source = Path(args.source).expanduser()
     if not source.is_dir():

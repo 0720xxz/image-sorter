@@ -83,9 +83,24 @@ def layout_patterns(layout: str) -> list[re.Pattern]:
 _STAMPED_NAME = re.compile(r"^\d{8}_\d{6}(?:_\d{3})?$")
 
 
-def looks_renamed(path: Path) -> bool:
-    """文件名已经是 YYYYMMDD_HHMMSS 这种形状时返回 True。"""
-    return bool(_STAMPED_NAME.fullmatch(path.stem))
+def parse_name_stamp(path: Path) -> datetime | None:
+    """从 YYYYMMDD_HHMMSS 形状的文件名里取出时间，取不到返回 None。"""
+    match = _STAMPED_NAME.fullmatch(path.stem)
+    if not match:
+        return None
+    digits = re.sub(r"_\d{3}$", "", path.stem).replace("_", "")
+    try:
+        return datetime.strptime(digits, "%Y%m%d%H%M%S")
+    except ValueError:
+        return None
+
+
+def name_matches_time(path: Path, when: datetime | None) -> bool:
+    """文件名里的时间和拍摄时间是否真的一致，不是只看长得像。"""
+    if when is None:
+        return False
+    stamped = parse_name_stamp(path)
+    return stamped is not None and stamped == when
 
 
 def looks_organized(path: Path, root: Path, patterns: list[re.Pattern]) -> bool:
@@ -357,15 +372,15 @@ def build_plan(options: Options, should_cancel=None, progress=None) -> Plan:
                                    action="skip", note="空文件"))
             continue
 
+        when, tag = decide_time(path, options.fallback)
+
         if options.mode in ("move", "link") and looks_organized(path, target, organized):
-            # 位置对了还要看名字：要求按拍摄时间命名时，老名字得放行重新处理
-            if not options.rename_files or looks_renamed(path):
-                plan.items.append(Item(src=path, when=None, source_tag="—", size=size,
+            # 位置对了还要看名字：名字里的时间必须等于拍摄时间，否则放行重新处理
+            if not options.rename_files or name_matches_time(path, when):
+                plan.items.append(Item(src=path, when=when, source_tag=tag, size=size,
                                        dst=path, action="in_place",
                                        note="已在月份文件夹里"))
                 continue
-
-        when, tag = decide_time(path, options.fallback)
         item = Item(src=path, when=when, source_tag=tag, size=size)
 
         if when is None and options.fallback == "skip":
